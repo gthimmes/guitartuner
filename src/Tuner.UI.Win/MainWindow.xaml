@@ -1,0 +1,142 @@
+<Window x:Class="Tuner.UI.Win.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Tuner.UI.Win"
+        xmlns:vm="clr-namespace:Tuner.UI.Win.ViewModels"
+        xmlns:controls="clr-namespace:Tuner.UI.Win.Controls"
+        xmlns:converters="clr-namespace:Tuner.UI.Win.Converters"
+        mc:Ignorable="d"
+        Title="Guitar Tuner"
+        Height="600"
+        Width="450"
+        MinHeight="500"
+        MinWidth="400"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:TunerStateToColorConverter x:Key="StateToColor"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Guitar Tuner"
+                       Style="{StaticResource TitleStyle}"
+                       HorizontalAlignment="Center"/>
+
+            <!-- Device Selector -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,10,0,0">
+                <TextBlock Text="Input: "
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,5,0"/>
+                <ComboBox x:Name="DeviceSelector"
+                          ItemsSource="{Binding AudioDevices}"
+                          SelectedItem="{Binding SelectedDevice}"
+                          DisplayMemberPath="Name"
+                          Width="250"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Main Tuner Display -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Target String Display -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
+                <TextBlock Text="{Binding TargetStringName, FallbackValue='--'}"
+                           Style="{StaticResource StringNameStyle}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Tuner Indicator -->
+            <controls:TunerIndicator Grid.Row="1"
+                                     x:Name="TunerIndicator"
+                                     CentsOffset="{Binding CentsOffset}"
+                                     State="{Binding State}"
+                                     Margin="20"/>
+
+            <!-- Tuning Instruction - Clear "Tune Up" / "Tune Down" / "In Tune" -->
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,20,0,0">
+                <TextBlock Text="{Binding TuningInstruction}"
+                           FontSize="32"
+                           FontWeight="Bold"
+                           Foreground="{Binding State, Converter={StaticResource StateToColor}}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- String Buttons -->
+        <ItemsControl Grid.Row="2"
+                      ItemsSource="{Binding StringTargets}"
+                      HorizontalAlignment="Center"
+                      Margin="0,20,0,10">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Button Content="{Binding Name}"
+                            Command="{Binding DataContext.SelectStringCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            Style="{StaticResource StringButtonStyle}"
+                            Margin="5,0"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Footer -->
+        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <!-- Tuning Selector -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,10">
+                <TextBlock Text="Tuning: "
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,5,0"/>
+                <ComboBox ItemsSource="{Binding TuningProfiles}"
+                          SelectedItem="{Binding SelectedTuning}"
+                          DisplayMemberPath="Name"
+                          Width="150"/>
+            </StackPanel>
+
+            <!-- Signal Level -->
+            <Grid HorizontalAlignment="Center" Width="300">
+                <ProgressBar Value="{Binding SignalLevel, Mode=OneWay}"
+                             Minimum="0" Maximum="1"
+                             Height="8"
+                             Style="{StaticResource SignalLevelStyle}"/>
+            </Grid>
+
+            <!-- Status -->
+            <TextBlock Text="{Binding StatusText}"
+                       HorizontalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Margin="0,10,0,0"
+                       FontSize="12"/>
+        </StackPanel>
+    </Grid>
+</Window>

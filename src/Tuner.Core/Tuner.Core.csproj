@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Tuner.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tuner.AppContracts\Tuner.AppContracts.csproj" />
+    <ProjectReference Include="..\Tuner.Audio.Abstractions\Tuner.Audio.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
