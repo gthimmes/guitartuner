@@ -195,6 +195,13 @@ Selected for:
 5. Convert lag to frequency: f = sampleRate / lag
 ```
 
+> **Do NOT apply a Hann (or any) window before detection.** MPM is a
+> time-domain autocorrelation/NSDF method. A window is only correct ahead of an
+> FFT; tapering the buffer ends here shortens the effective overlap at long lags
+> and biases the interpolated peak **sharp** — measured at **+8 cents on low E**.
+> The detection buffer gets DC-offset removal only (`TunerEngine.ProcessBuffer`).
+> This is verified by `PitchAccuracyTests` and the `Tuner.Diagnostics` harness.
+
 ### Cents Calculation
 
 ```csharp

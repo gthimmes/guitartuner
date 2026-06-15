@@ -20,6 +20,41 @@ This project follows the test pyramid approach to ensure comprehensive coverage 
 /────────────────────────\
 ```
 
+> **Note:** Sections below the next divider describe the intended/aspirational
+> test design. The two subsections immediately following document tests and tools
+> that **actually exist in the repo today**.
+
+## Offline DSP diagnostics & pitch-accuracy regression (implemented)
+
+### `tools/Tuner.Diagnostics` — WAV → real-DSP harness
+
+A console app that feeds WAV files through the **actual** detection pipeline
+(`McLeodPitchDetector` + the engine's per-window processing) and reports the
+median detected frequency, nearest open string, confidence, and **cents vs
+expected** — computed both *with* and *without* a window so windowing artifacts
+are obvious. This isolates DSP correctness from live microphone capture.
+
+```bash
+dotnet run --project tools/Tuner.Diagnostics -- gen assets/reference         # synthesize exact-pitch references
+dotnet run --project tools/Tuner.Diagnostics -- analyze-all assets/reference # analyze a folder
+dotnet run --project tools/Tuner.Diagnostics -- analyze file.wav 82.4069     # analyze one file (expected Hz)
+```
+
+Reference audio (`assets/reference/`) is gitignored; regenerate per the README.
+It found the pitch-accuracy bug: a Hann window applied before the autocorrelation
+detector biased low strings sharp (E2 +8.2¢). Without the window every synthetic
+open string detects at ±0.0 cents.
+
+### `PitchAccuracyTests` (Tuner.Integration.Tests)
+
+Locks in accuracy (not just string identity) through the full `TunerEngine`:
+each open string, played as a harmonic-rich tone, must be detected **within ±5
+cents**. The pre-existing engine tests only asserted the string *name*, which is
+how an 8-cent error shipped unnoticed. This test fails if a window is ever
+re-introduced into the detection path.
+
+---
+
 ## Unit Tests (Tuner.Core.Tests)
 
 ### Purpose

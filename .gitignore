@@ -27,3 +27,8 @@ TestResults/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local reference audio (regenerate with: dotnet run --project tools/Tuner.Diagnostics -- gen assets/reference)
+# Real samples are CC-licensed (attribution required) and binary; keep them local.
+assets/reference/*.wav
+assets/reference/*.ogg

@@ -238,8 +238,11 @@ public sealed class TunerEngine : ITunerEngine
         // Remove DC offset
         SignalAnalyzer.RemoveDcOffset(window);
 
-        // Apply window function
-        SignalAnalyzer.ApplyHannWindow(window);
+        // NOTE: Do NOT apply a Hann (or any) window here. This detector is
+        // autocorrelation/NSDF based (time domain), not FFT based. Tapering the
+        // window ends shortens the effective overlap at long lags and biases the
+        // interpolated peak sharp -- measured at +8 cents on low E. Windowing is
+        // only appropriate ahead of an FFT, which this path does not use.
 
         // Detect pitch
         var pitchResult = _pitchDetector.DetectPitch(window, sampleRate);
