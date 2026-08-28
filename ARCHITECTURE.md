@@ -214,26 +214,52 @@ cents = 1200 * Math.Log2(detectedFreq / targetFreq)
 
 ### Stability Filtering
 
-```csharp
-// Exponential Moving Average
-smoothedFreq = alpha * newFreq + (1 - alpha) * smoothedFreq
+Raw readings from a plucked string are noisy in three distinct ways; the
+`StabilityFilter` has one stage for each, in this order:
 
-// InTune requires N consecutive frames
-if (|cents| <= tolerance for N frames) state = InTune
 ```
+raw (Hz, cents, confidence, RMS)
+  │
+  ├─ level < MinRms ──────────────────────────────▶ TooQuiet (history cleared)
+  │
+  ├─ onset?  RMS > envelope × OnsetRatio           new pluck: clear history,
+  │          (envelope = slow EMA of RMS)           hold OnsetHoldFrames frames
+  │                                                 (the attack transient reads
+  │                                                  sharp and inharmonic)
+  ├─ confidence < MinConfidence ──────────────────▶ Unstable (keeps last value)
+  │
+  ├─ running median over MedianWindow readings      drops single-frame outliers
+  │  (needs ≥3 readings before reporting)           (octave errors, harmonics)
+  │
+  ├─ jump gate: |median − smoothed| > JumpThreshold  ignore until it persists
+  │             for JumpConfirmFrames, then SNAP     JumpConfirmFrames (new
+  │                                                  string / big peg turn)
+  ├─ EMA:  smoothed = α·median + (1−α)·smoothed
+  │
+  └─ |cents| ≤ tolerance for StabilityFrames ──────▶ InTune, else Flat / Sharp
+```
+
+While holding (attack, unconfirmed jump, not yet settled) the filter re-reports
+the last good reading so the needle sits still instead of twitching.
 
 ## Configuration
 
-Key parameters are configurable:
+Key parameters are configurable (`TunerConfiguration`):
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | InTuneTolerance | 5 cents | Threshold for "in tune" state |
-| StabilityFrames | 15 | Consecutive frames for InTune |
+| StabilityFrames | 8 | Consecutive in-tolerance frames for InTune |
 | SmoothingAlpha | 0.3 | EMA smoothing factor |
-| MinConfidence | 0.8 | Minimum pitch confidence |
-| MinRmsThreshold | 0.01 | Minimum signal level |
-| HysteresisFrames | 10 | Frames before string switch |
+| MedianWindow | 5 | Readings in the outlier-rejecting median |
+| OnsetHoldFrames | 6 | Frames ignored after a pluck is detected |
+| OnsetRatio | 2.5 | RMS / envelope ratio that counts as a pluck |
+| JumpThresholdCents | 30 | Step size treated as a jump, not a drift |
+| JumpConfirmFrames | 4 | Frames a jump must persist before it is shown |
+| MinConfidence | 0.7 | Minimum pitch confidence (NSDF clarity) |
+| MinRmsThreshold | 0.002 | Minimum signal level |
+| HysteresisFrames | 5 | Frames before string switch |
+| WindowSize / HopSize | 4096 / 512 | Analysis window and hop (samples) |
 
 ## Extensibility Points
 

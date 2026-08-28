@@ -9,10 +9,10 @@
         xmlns:converters="clr-namespace:Tuner.UI.Win.Converters"
         mc:Ignorable="d"
         Title="Guitar Tuner"
-        Height="600"
-        Width="450"
-        MinHeight="500"
-        MinWidth="400"
+        Height="720"
+        Width="560"
+        MinHeight="620"
+        MinWidth="520"
         Background="{StaticResource BackgroundBrush}"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
@@ -54,36 +54,43 @@
             </StackPanel>
         </StackPanel>
 
-        <!-- Main Tuner Display -->
+        <!-- Main Tuner Display: string + instruction on the left, vertical gauge on the right -->
         <Grid Grid.Row="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-            <!-- Target String Display -->
-            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
-                <TextBlock Text="{Binding TargetStringName, FallbackValue='--'}"
+            <StackPanel Grid.Column="0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+                <!-- Target String Display -->
+                <TextBlock Text="{Binding TargetStringName, FallbackValue='—', TargetNullValue='—'}"
                            Style="{StaticResource StringNameStyle}"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="{Binding TargetFrequency, StringFormat='{}{0:F2} Hz', TargetNullValue=''}"
+                           Style="{StaticResource FrequencyStyle}"
+                           HorizontalAlignment="Center"
+                           Margin="0,-6,0,18"/>
+
+                <!-- Tuning Instruction - Clear "Tune Up" / "Tune Down" / "In Tune" -->
+                <TextBlock Text="{Binding TuningInstruction}"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           MaxWidth="200"
+                           Foreground="{Binding State, Converter={StaticResource StateToColor}}"
                            HorizontalAlignment="Center"/>
             </StackPanel>
 
             <!-- Tuner Indicator -->
-            <controls:TunerIndicator Grid.Row="1"
+            <controls:TunerIndicator Grid.Column="1"
                                      x:Name="TunerIndicator"
                                      CentsOffset="{Binding CentsOffset}"
                                      State="{Binding State}"
-                                     Margin="20"/>
-
-            <!-- Tuning Instruction - Clear "Tune Up" / "Tune Down" / "In Tune" -->
-            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,20,0,0">
-                <TextBlock Text="{Binding TuningInstruction}"
-                           FontSize="32"
-                           FontWeight="Bold"
-                           Foreground="{Binding State, Converter={StaticResource StateToColor}}"
-                           HorizontalAlignment="Center"/>
-            </StackPanel>
+                                     Width="280"
+                                     Margin="0,0,0,0"/>
         </Grid>
 
         <!-- String Buttons -->

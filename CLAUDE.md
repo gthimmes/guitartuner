@@ -14,7 +14,25 @@ Pitch Method (MPM). Layered, testable architecture; see `ARCHITECTURE.md`.
 - `tests/` — `Tuner.Core.Tests`, `Tuner.Integration.Tests`, `Tuner.UI.Tests`.
 - `tools/Tuner.Diagnostics` — offline WAV→DSP harness (see its README).
 
-Build: `dotnet build`. Test: `dotnet test` (all should pass; 115 at last count).
+Build: `dotnet build`. Test: `dotnet test` (all should pass; 120 at last count).
+
+## Stability pipeline (jitter before lock-in)
+
+Live symptom was the reading "jumping above and below" for a moment after each
+pluck. `StabilityFilter` now runs, in order: onset hold (RMS jump over a slow
+envelope → discard the attack transient for `OnsetHoldFrames`), running median
+(`MedianWindow`, kills octave/harmonic outliers), jump gate (a step >
+`JumpThresholdCents` must persist `JumpConfirmFrames` then snaps), then the EMA.
+Diagram + knob table in `ARCHITECTURE.md`. Tune the knobs in
+`TunerConfiguration`, not by adding more smoothing in the UI.
+
+## UI indicator
+
+`Controls/TunerIndicator` is a `FrameworkElement` drawn in `OnRender` (no XAML
+template): vertical scale, needle moves UP when sharp / DOWN when flat, inner
+±10¢ occupies half the scale for fine resolution, big arrow above = tune up
+(flat), below = tune down (sharp). Needle glides via a 70 ms animation on a
+private `DisplayCents` DP; off-screen it snaps so it can be rendered in tests.
 
 ## Known-fixed bug: pitch read sharp ("really off")
 
@@ -46,17 +64,13 @@ curl -L "https://upload.wikimedia.org/wikipedia/commons/0/0a/Guitar_string_E2.og
 ffmpeg -y -i assets/reference/wikimedia_E2.ogg -ac 1 -c:a pcm_f32le assets/reference/wikimedia_E2.wav
 ```
 
-## Open / next step: live microphone path
+## Live microphone path: verified
 
-The harness proves the **DSP** is correct. The **live capture path** has not been
-verified on hardware. If the tuner is still off live while recorded WAVs analyze
-correctly, the bug is in capture, not detection. **Prime suspect:**
-`TunerEngine.ProcessingLoop` reads the sample rate from
-`_audioInput.CurrentDevice?.SampleRate` (set once from the WASAPI *mix* format),
-while each frame also carries its own rate in `AudioFrameEventArgs`. If those
-ever disagree, `f = sampleRate / lag` is scaled wrong and everything reads off by
-that ratio. To validate: record an open string to 48 kHz mono WAV and run it
-through the harness; compare to the live UI reading.
+Tested on real hardware with a guitar (Aug 2026): pitch reads correctly live, so
+the capture path (sample rate from `_audioInput.CurrentDevice?.SampleRate`) is
+fine on the tested device. If a *different* device ever reads off by a constant
+ratio, that sample-rate assumption in `TunerEngine.ProcessingLoop` is still the
+first place to look (each `AudioFrameEventArgs` also carries its own rate).
 
 Standard tuning targets (Hz): E2 82.41, A2 110.00, D3 146.83, G3 196.00,
 B3 246.94, E4 329.63.

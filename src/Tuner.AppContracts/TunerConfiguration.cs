@@ -16,9 +16,40 @@ public sealed class TunerConfiguration
     public int StabilityFrames { get; set; } = 8;
 
     /// <summary>
-    /// Gets or sets the EMA smoothing factor (0-1). Higher = more responsive. Default: 0.5.
+    /// Gets or sets the EMA smoothing factor (0-1). Higher = more responsive. Default: 0.3.
     /// </summary>
-    public double SmoothingAlpha { get; set; } = 0.5;
+    public double SmoothingAlpha { get; set; } = 0.3;
+
+    /// <summary>
+    /// Gets or sets the number of raw readings the running median spans before
+    /// smoothing. Rejects single-frame outliers (octave errors). Default: 5.
+    /// </summary>
+    public int MedianWindow { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets how many frames to ignore after a pluck is detected, so the
+    /// inharmonic attack transient never reaches the display. Default: 6.
+    /// </summary>
+    public int OnsetHoldFrames { get; set; } = 6;
+
+    /// <summary>
+    /// Gets or sets the RMS ratio over the running level envelope that counts as
+    /// a new pluck (onset). Default: 2.5.
+    /// </summary>
+    public double OnsetRatio { get; set; } = 2.5;
+
+    /// <summary>
+    /// Gets or sets the size of a step (in cents) from the current smoothed
+    /// reading that is treated as a jump and must persist before it is shown.
+    /// Default: 30.
+    /// </summary>
+    public double JumpThresholdCents { get; set; } = 30.0;
+
+    /// <summary>
+    /// Gets or sets how many consecutive frames a jump must persist before the
+    /// reading snaps to it. Default: 4.
+    /// </summary>
+    public int JumpConfirmFrames { get; set; } = 4;
 
     /// <summary>
     /// Gets or sets the minimum pitch detection confidence (0-1). Default: 0.7.
@@ -66,6 +97,16 @@ public sealed class TunerConfiguration
             throw new ArgumentException("StabilityFrames must be at least 1.", nameof(StabilityFrames));
         if (SmoothingAlpha is <= 0 or > 1)
             throw new ArgumentException("SmoothingAlpha must be between 0 and 1.", nameof(SmoothingAlpha));
+        if (MedianWindow < 1)
+            throw new ArgumentException("MedianWindow must be at least 1.", nameof(MedianWindow));
+        if (OnsetHoldFrames < 0)
+            throw new ArgumentException("OnsetHoldFrames must be non-negative.", nameof(OnsetHoldFrames));
+        if (OnsetRatio < 1)
+            throw new ArgumentException("OnsetRatio must be at least 1.", nameof(OnsetRatio));
+        if (JumpThresholdCents < 0)
+            throw new ArgumentException("JumpThresholdCents must be non-negative.", nameof(JumpThresholdCents));
+        if (JumpConfirmFrames < 1)
+            throw new ArgumentException("JumpConfirmFrames must be at least 1.", nameof(JumpConfirmFrames));
         if (MinConfidence is < 0 or > 1)
             throw new ArgumentException("MinConfidence must be between 0 and 1.", nameof(MinConfidence));
         if (MinRmsThreshold < 0)

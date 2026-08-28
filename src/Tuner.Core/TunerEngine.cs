@@ -38,7 +38,15 @@ public sealed class TunerEngine : ITunerEngine
         // Optimized for guitar: 70 Hz (below low E) to 400 Hz (above high E)
         _pitchDetector = new McLeodPitchDetector(minFrequency: 70, maxFrequency: 400);
         _stringClassifier = new StringClassifier(_configuration.MaxCentsForStringMatch, _configuration.HysteresisFrames);
-        _stabilityFilter = new StabilityFilter(_configuration.SmoothingAlpha, _configuration.StabilityFrames, _configuration.InTuneTolerance);
+        _stabilityFilter = new StabilityFilter(
+            _configuration.SmoothingAlpha,
+            _configuration.StabilityFrames,
+            _configuration.InTuneTolerance,
+            _configuration.MedianWindow,
+            _configuration.OnsetHoldFrames,
+            _configuration.JumpThresholdCents,
+            _configuration.JumpConfirmFrames,
+            _configuration.OnsetRatio);
         _sampleQueue = new ConcurrentQueue<float[]>();
         _sampleBuffer = new float[_configuration.WindowSize * 2];
 
