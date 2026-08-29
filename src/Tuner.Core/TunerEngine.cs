@@ -46,7 +46,9 @@ public sealed class TunerEngine : ITunerEngine
             _configuration.OnsetHoldFrames,
             _configuration.JumpThresholdCents,
             _configuration.JumpConfirmFrames,
-            _configuration.OnsetRatio);
+            _configuration.OnsetRatio,
+            _configuration.NoiseGateRatio,
+            _configuration.MaxSpreadCents);
         _sampleQueue = new ConcurrentQueue<float[]>();
         _sampleBuffer = new float[_configuration.WindowSize * 2];
 

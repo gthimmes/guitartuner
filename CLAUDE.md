@@ -8,23 +8,40 @@ Pitch Method (MPM). Layered, testable architecture; see `ARCHITECTURE.md`.
 - `src/Tuner.Core` — DSP: `McLeodPitchDetector`, `TunerEngine`, `SignalAnalyzer`,
   `StringClassifier`, `StabilityFilter`, `CentsCalculator`. Platform-independent.
 - `src/Tuner.AppContracts` — shared types (`TunerConfiguration`, `TunerFrame`, …).
-- `src/Tuner.Audio.Abstractions` / `src/Tuner.Audio.Windows` — `IAudioInput` and
-  the NAudio/WASAPI implementation (`WasapiAudioInput`).
+- `src/Tuner.Audio.Abstractions` / `src/Tuner.Audio.Windows` — `IAudioInput` /
+  `IReferenceTonePlayer` and the NAudio implementations (`WasapiAudioInput`,
+  `WaveOutReferenceTonePlayer`).
 - `src/Tuner.UI.Win` — WPF UI.
 - `tests/` — `Tuner.Core.Tests`, `Tuner.Integration.Tests`, `Tuner.UI.Tests`.
 - `tools/Tuner.Diagnostics` — offline WAV→DSP harness (see its README).
 
-Build: `dotnet build`. Test: `dotnet test` (all should pass; 120 at last count).
+Build: `dotnet build`. Test: `dotnet test` (all should pass; 145 at last count).
 
-## Stability pipeline (jitter before lock-in)
+## Stability pipeline (jitter and noise before lock-in)
 
-Live symptom was the reading "jumping above and below" for a moment after each
-pluck. `StabilityFilter` now runs, in order: onset hold (RMS jump over a slow
-envelope → discard the attack transient for `OnsetHoldFrames`), running median
-(`MedianWindow`, kills octave/harmonic outliers), jump gate (a step >
-`JumpThresholdCents` must persist `JumpConfirmFrames` then snaps), then the EMA.
-Diagram + knob table in `ARCHITECTURE.md`. Tune the knobs in
-`TunerConfiguration`, not by adding more smoothing in the UI.
+Two live symptoms: the reading "jumping above and below" for a moment after
+each pluck, and "any noise in the room makes the scale jump all over the place"
+(other tuners don't react to every sound). `StabilityFilter` runs, in order:
+adaptive noise gate (learns the RMS of non-tonal room sound; a signal must be
+`NoiseGateRatio`× louder — notes and pluck attacks never raise the floor),
+onset hold (RMS jump over a slow envelope → discard the attack transient for
+`OnsetHoldFrames`), confidence gate (`MinConfidence` 0.8; real notes read
+0.95+), running median (`MedianWindow`, full window required), agreement check
+(all but one reading within `MaxSpreadCents` of the median — noise disagrees
+with itself frame to frame), jump gate (a step > `JumpThresholdCents` must
+persist `JumpConfirmFrames` then snaps), then the EMA. With nothing locked,
+holds report `Listening` (UI idle) not `Unstable`. Diagram + knob table in
+`ARCHITECTURE.md`. Tune the knobs in `TunerConfiguration`, not by adding more
+smoothing in the UI.
+
+## Reference tone mode
+
+Header has a Microphone / Reference Tone switch (`MainViewModel.IsToneMode`).
+In tone mode the string buttons play that string's pitch through the speakers
+(`ReferenceToneSynthesizer` in Core: fundamental + 5 harmonics, 20 ms ramps;
+`WaveOutReferenceTonePlayer` in Audio.Windows) and `TunerFrame`s are ignored
+because the mic would hear the speaker. Works without a microphone. Synth pitch
+is guarded by `ReferenceToneSynthesizerTests` (detector reads it within 1¢).
 
 ## UI indicator
 

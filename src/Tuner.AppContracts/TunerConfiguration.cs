@@ -52,9 +52,23 @@ public sealed class TunerConfiguration
     public int JumpConfirmFrames { get; set; } = 4;
 
     /// <summary>
-    /// Gets or sets the minimum pitch detection confidence (0-1). Default: 0.7.
+    /// Gets or sets how much louder than the learned background-noise level a
+    /// sound must be before the tuner reacts to it. Default: 3 (~10 dB).
     /// </summary>
-    public double MinConfidence { get; set; } = 0.7;
+    public double NoiseGateRatio { get; set; } = 3.0;
+
+    /// <summary>
+    /// Gets or sets how closely (in cents) the readings in the median window
+    /// must agree before a pitch is believed. Noise that sneaks past the
+    /// confidence check reads differently every frame and fails this. Default: 15.
+    /// </summary>
+    public double MaxSpreadCents { get; set; } = 15.0;
+
+    /// <summary>
+    /// Gets or sets the minimum pitch detection confidence (NSDF clarity, 0-1).
+    /// A clean plucked note reads 0.95+; room noise mostly below 0.8. Default: 0.8.
+    /// </summary>
+    public double MinConfidence { get; set; } = 0.8;
 
     /// <summary>
     /// Gets or sets the minimum RMS signal level. Default: 0.002 (very low for sensitivity).
@@ -107,6 +121,10 @@ public sealed class TunerConfiguration
             throw new ArgumentException("JumpThresholdCents must be non-negative.", nameof(JumpThresholdCents));
         if (JumpConfirmFrames < 1)
             throw new ArgumentException("JumpConfirmFrames must be at least 1.", nameof(JumpConfirmFrames));
+        if (NoiseGateRatio < 1)
+            throw new ArgumentException("NoiseGateRatio must be at least 1.", nameof(NoiseGateRatio));
+        if (MaxSpreadCents < 0)
+            throw new ArgumentException("MaxSpreadCents must be non-negative.", nameof(MaxSpreadCents));
         if (MinConfidence is < 0 or > 1)
             throw new ArgumentException("MinConfidence must be between 0 and 1.", nameof(MinConfidence));
         if (MinRmsThreshold < 0)

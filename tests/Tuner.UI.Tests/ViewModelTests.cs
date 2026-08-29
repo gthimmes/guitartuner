@@ -14,12 +14,14 @@ public class ViewModelTests
 {
     private readonly Mock<ITunerEngine> _mockEngine;
     private readonly Mock<IAudioInput> _mockAudioInput;
+    private readonly Mock<IReferenceTonePlayer> _mockTonePlayer;
     private readonly MainViewModel _viewModel;
 
     public ViewModelTests()
     {
         _mockEngine = new Mock<ITunerEngine>();
         _mockAudioInput = new Mock<IAudioInput>();
+        _mockTonePlayer = new Mock<IReferenceTonePlayer>();
 
         _mockEngine.Setup(e => e.CurrentTuning).Returns(CreateStandardTuning());
         _mockEngine.Setup(e => e.Configuration).Returns(TunerConfiguration.Default);
@@ -28,7 +30,7 @@ public class ViewModelTests
             new("test-device", "Test Microphone", true)
         });
 
-        _viewModel = new MainViewModel(_mockEngine.Object, _mockAudioInput.Object);
+        _viewModel = new MainViewModel(_mockEngine.Object, _mockAudioInput.Object, _mockTonePlayer.Object);
     }
 
     [Fact]
@@ -130,5 +132,97 @@ public class ViewModelTests
             new StringTarget("A2", 110.00, 5),
             new StringTarget("E2", 82.41, 6)
         });
+    }
+
+    // ---- Reference tone mode -----------------------------------------------
+
+    private StringTarget LowE => _viewModel.StringTargets.First(s => s.StringNumber == 6);
+
+    [Fact]
+    public void MicrophoneMode_SelectString_SetsTargetWithoutPlayingTone()
+    {
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _viewModel.TargetStringName.Should().Be(LowE.Name);
+        _viewModel.TargetFrequency.Should().BeApproximately(82.41, 0.01);
+        _viewModel.IsTonePlaying.Should().BeFalse();
+        _mockTonePlayer.Verify(p => p.Play(It.IsAny<double>()), Times.Never);
+    }
+
+    [Fact]
+    public void ToneMode_SelectString_PlaysItsPitch()
+    {
+        _viewModel.IsToneMode = true;
+
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _mockTonePlayer.Verify(p => p.Play(It.Is<double>(f => Math.Abs(f - 82.41) < 0.01)), Times.Once);
+        _viewModel.PlayingString.Should().Be(LowE);
+        _viewModel.IsTonePlaying.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToneMode_SelectPlayingStringAgain_StopsIt()
+    {
+        _viewModel.IsToneMode = true;
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _mockTonePlayer.Verify(p => p.Stop(), Times.AtLeastOnce);
+        _viewModel.PlayingString.Should().BeNull();
+        _viewModel.IsTonePlaying.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToneMode_SelectDifferentString_SwitchesPitch()
+    {
+        _viewModel.IsToneMode = true;
+        _viewModel.SelectStringCommand.Execute(LowE);
+        var a = _viewModel.StringTargets.First(s => s.StringNumber == 5);
+
+        _viewModel.SelectStringCommand.Execute(a);
+
+        _mockTonePlayer.Verify(p => p.Play(It.Is<double>(f => Math.Abs(f - 110.0) < 0.01)), Times.Once);
+        _viewModel.PlayingString.Should().Be(a);
+    }
+
+    [Fact]
+    public void StopToneCommand_StopsPlayer()
+    {
+        _viewModel.IsToneMode = true;
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _viewModel.StopToneCommand.Execute(null);
+
+        _mockTonePlayer.Verify(p => p.Stop(), Times.AtLeastOnce);
+        _viewModel.IsTonePlaying.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LeavingToneMode_StopsToneAndResetsDisplay()
+    {
+        _viewModel.IsToneMode = true;
+        _viewModel.SelectStringCommand.Execute(LowE);
+
+        _viewModel.IsToneMode = false;
+
+        _mockTonePlayer.Verify(p => p.Stop(), Times.AtLeastOnce);
+        _viewModel.IsTonePlaying.Should().BeFalse();
+        _viewModel.State.Should().Be(TunerState.Listening);
+        _viewModel.CentsOffset.Should().Be(0);
+    }
+
+    [Fact]
+    public void ToneMode_PlayerFailure_ReportsErrorInsteadOfThrowing()
+    {
+        _mockTonePlayer.Setup(p => p.Play(It.IsAny<double>())).Throws(new InvalidOperationException("no output device"));
+        _viewModel.IsToneMode = true;
+
+        var act = () => _viewModel.SelectStringCommand.Execute(LowE);
+
+        act.Should().NotThrow();
+        _viewModel.IsTonePlaying.Should().BeFalse();
+        _viewModel.StatusText.Should().Contain("no output device");
     }
 }

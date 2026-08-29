@@ -15,7 +15,7 @@ var standard = new (string Name, double Hz)[]
 const int WindowSize = 4096;
 const int HopSize = 512;
 const double MinFreq = 70, MaxFreq = 400;
-const double MinConfidence = 0.7;
+const double MinConfidence = 0.8;
 
 if (args.Length == 0)
 {

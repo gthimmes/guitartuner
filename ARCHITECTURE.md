@@ -100,6 +100,7 @@ GuitarTuner/
 
 **Contents:**
 - `IAudioInput` interface
+- `IReferenceTonePlayer` interface (play a pitch through the speakers)
 - `AudioFrameEventArgs` - Audio sample data container
 
 **Dependencies:** Tuner.AppContracts
@@ -109,13 +110,15 @@ GuitarTuner/
 **Purpose:** Windows-specific audio capture using NAudio.
 
 **Implementation:**
-- WASAPI capture for low latency (~10-20ms)
-- Device enumeration and hot-swap support
-- Automatic format conversion to float samples
-- Handles device disconnect/reconnect gracefully
+- `WasapiAudioInput`: WASAPI capture for low latency (~10-20ms), device
+  enumeration and hot-swap, format conversion to float samples, graceful
+  disconnect/reconnect
+- `WaveOutReferenceTonePlayer`: plays `Tuner.Core.ReferenceToneSynthesizer`
+  through the default output via NAudio `WaveOutEvent`
 
 **Dependencies:**
 - Tuner.Audio.Abstractions
+- Tuner.Core (for the tone synthesizer)
 - NAudio (NuGet package)
 
 ### Tuner.UI.Win
@@ -123,8 +126,9 @@ GuitarTuner/
 **Purpose:** WPF presentation layer. "Dumb" UI that only displays data.
 
 **Architecture:** MVVM pattern
-- `MainViewModel` - Binds to TunerEngine events
-- `TunerView` - Visual tuner display (needle/indicator)
+- `MainViewModel` - Binds to TunerEngine events; owns the Microphone /
+  Reference Tone mode switch (`IsToneMode`)
+- `Controls/TunerIndicator` - Visual tuner display (vertical gauge, arrows)
 - `DeviceSelector` - Audio device dropdown
 
 **Key Principles:**
@@ -214,23 +218,32 @@ cents = 1200 * Math.Log2(detectedFreq / targetFreq)
 
 ### Stability Filtering
 
-Raw readings from a plucked string are noisy in three distinct ways; the
+Raw readings from a microphone are noisy in several distinct ways; the
 `StabilityFilter` has one stage for each, in this order:
 
 ```
 raw (Hz, cents, confidence, RMS)
   │
-  ├─ level < MinRms ──────────────────────────────▶ TooQuiet (history cleared)
+  ├─ noise gate: level < max(MinRms, noiseFloor × NoiseGateRatio) ▶ TooQuiet
+  │     noiseFloor = RMS of non-tonal sound (fans, voices, clatter), learned
+  │     from frames that fail the confidence check: rises slowly (~0.5 s),
+  │     falls fast. A note, or a pluck's attack burst, never raises it, so a
+  │     long sustained note is not mistaken for a noisier room.
   │
   ├─ onset?  RMS > envelope × OnsetRatio           new pluck: clear history,
   │          (envelope = slow EMA of RMS)           hold OnsetHoldFrames frames
   │                                                 (the attack transient reads
   │                                                  sharp and inharmonic)
-  ├─ confidence < MinConfidence ──────────────────▶ Unstable (keeps last value)
-  │
+  ├─ confidence < MinConfidence ──────────────────▶ note locked: Unstable
+  │                                                 (keeps last value);
+  │                                                 nothing locked: Listening
+  │                                                 (UI stays idle)
   ├─ running median over MedianWindow readings      drops single-frame outliers
-  │  (needs ≥3 readings before reporting)           (octave errors, harmonics)
+  │  (needs a full window before reporting)         (octave errors, harmonics)
   │
+  ├─ agreement: all but one reading within         noise that sneaks past the
+  │  ±MaxSpreadCents of the median, else hold       confidence check reads a
+  │                                                  different pitch every frame
   ├─ jump gate: |median − smoothed| > JumpThreshold  ignore until it persists
   │             for JumpConfirmFrames, then SNAP     JumpConfirmFrames (new
   │                                                  string / big peg turn)
@@ -240,7 +253,26 @@ raw (Hz, cents, confidence, RMS)
 ```
 
 While holding (attack, unconfirmed jump, not yet settled) the filter re-reports
-the last good reading so the needle sits still instead of twitching.
+the last good reading so the needle sits still instead of twitching. When
+nothing is locked yet, holds report `Listening` rather than `Unstable`, so
+room noise leaves the display idle instead of showing a twitching needle and
+"Hold steady".
+
+### Reference Tone
+
+An alternative to the microphone: play the target pitch and tune by ear.
+
+- `Tuner.Core.ReferenceToneSynthesizer` - additive synthesis, fundamental +
+  five harmonics with plucked-string-like amplitudes (a bare 82 Hz sine is
+  inaudible on laptop speakers), 20 ms fade in/out so there are no clicks,
+  phase-continuous pitch changes. Pure DSP, unit-tested by running its output
+  through `McLeodPitchDetector` (within 1 cent on all six strings).
+- `WaveOutReferenceTonePlayer` (Audio.Windows) wraps it as an NAudio
+  `ISampleProvider`; the output device is released ~250 ms after Stop.
+- `MainViewModel.IsToneMode` switches the UI: the gauge is replaced by the
+  playing string + "Tune until the beating stops", the string buttons play /
+  stop tones, and incoming `TunerFrame`s are ignored (the microphone would
+  hear the speaker).
 
 ## Configuration
 
@@ -256,8 +288,10 @@ Key parameters are configurable (`TunerConfiguration`):
 | OnsetRatio | 2.5 | RMS / envelope ratio that counts as a pluck |
 | JumpThresholdCents | 30 | Step size treated as a jump, not a drift |
 | JumpConfirmFrames | 4 | Frames a jump must persist before it is shown |
-| MinConfidence | 0.7 | Minimum pitch confidence (NSDF clarity) |
-| MinRmsThreshold | 0.002 | Minimum signal level |
+| NoiseGateRatio | 3 | Sound must be this much louder than the learned noise floor |
+| MaxSpreadCents | 15 | Median-window readings must agree this closely |
+| MinConfidence | 0.8 | Minimum pitch confidence (NSDF clarity) |
+| MinRmsThreshold | 0.002 | Absolute minimum signal level |
 | HysteresisFrames | 5 | Frames before string switch |
 | WindowSize / HopSize | 4096 / 512 | Analysis window and hop (samples) |
 

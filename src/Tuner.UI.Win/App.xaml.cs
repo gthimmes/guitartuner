@@ -31,6 +31,7 @@ public partial class App : Application
     {
         // Audio
         services.AddSingleton<IAudioInput, WasapiAudioInput>();
+        services.AddSingleton<IReferenceTonePlayer, WaveOutReferenceTonePlayer>();
 
         // Core
         services.AddSingleton<TunerConfiguration>(_ => TunerConfiguration.Default);

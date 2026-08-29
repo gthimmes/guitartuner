@@ -9,9 +9,9 @@
         xmlns:converters="clr-namespace:Tuner.UI.Win.Converters"
         mc:Ignorable="d"
         Title="Guitar Tuner"
-        Height="720"
+        Height="740"
         Width="560"
-        MinHeight="620"
+        MinHeight="640"
         MinWidth="520"
         Background="{StaticResource BackgroundBrush}"
         WindowStartupLocation="CenterScreen"
@@ -22,6 +22,8 @@
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <converters:TunerStateToColorConverter x:Key="StateToColor"/>
+        <converters:InverseBoolConverter x:Key="InverseBool"/>
+        <converters:AreEqualConverter x:Key="AreEqual"/>
     </Window.Resources>
 
     <Grid Margin="20">
@@ -33,7 +35,7 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="Guitar Tuner"
                        Style="{StaticResource TitleStyle}"
                        HorizontalAlignment="Center"/>
@@ -52,10 +54,29 @@
                           DisplayMemberPath="Name"
                           Width="250"/>
             </StackPanel>
+
+            <!-- Mode: listen with the microphone, or play a reference tone -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6"
+                    Padding="3"
+                    HorizontalAlignment="Center"
+                    Margin="0,14,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Content="Microphone"
+                                 GroupName="TunerMode"
+                                 Style="{StaticResource ModeButtonStyle}"
+                                 IsChecked="{Binding IsToneMode, Converter={StaticResource InverseBool}}"/>
+                    <RadioButton Content="Reference Tone"
+                                 GroupName="TunerMode"
+                                 Style="{StaticResource ModeButtonStyle}"
+                                 IsChecked="{Binding IsToneMode}"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <!-- Main Tuner Display: string + instruction on the left, vertical gauge on the right -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1"
+              Visibility="{Binding IsToneMode, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -93,7 +114,42 @@
                                      Margin="0,0,0,0"/>
         </Grid>
 
-        <!-- String Buttons -->
+        <!-- Reference Tone Display -->
+        <StackPanel Grid.Row="1"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Visibility="{Binding IsToneMode, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="🔊"
+                       FontSize="40"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,4"
+                       Foreground="{StaticResource AccentBrush}"
+                       Visibility="{Binding IsTonePlaying, Converter={StaticResource BoolToVisibility}}"/>
+            <TextBlock Text="{Binding PlayingString.Name, FallbackValue='—', TargetNullValue='—'}"
+                       Style="{StaticResource StringNameStyle}"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding PlayingString.Frequency, StringFormat='{}{0:F2} Hz', TargetNullValue=''}"
+                       Style="{StaticResource FrequencyStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,-6,0,18"/>
+            <TextBlock Text="{Binding ToneInstruction}"
+                       FontSize="22"
+                       FontWeight="SemiBold"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="340"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       HorizontalAlignment="Center"/>
+            <Button Content="Stop"
+                    Command="{Binding StopToneCommand}"
+                    Style="{StaticResource StringButtonStyle}"
+                    Padding="28,10"
+                    HorizontalAlignment="Center"
+                    Margin="0,24,0,0"
+                    Visibility="{Binding IsTonePlaying, Converter={StaticResource BoolToVisibility}}"/>
+        </StackPanel>
+
+        <!-- String Buttons: pick the target (microphone) or play the tone (reference) -->
         <ItemsControl Grid.Row="2"
                       ItemsSource="{Binding StringTargets}"
                       HorizontalAlignment="Center"
@@ -108,8 +164,25 @@
                     <Button Content="{Binding Name}"
                             Command="{Binding DataContext.SelectStringCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             CommandParameter="{Binding}"
-                            Style="{StaticResource StringButtonStyle}"
-                            Margin="5,0"/>
+                            Margin="5,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource StringButtonStyle}">
+                                <Style.Triggers>
+                                    <!-- Highlight the string whose reference tone is playing -->
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource AreEqual}">
+                                                <Binding/>
+                                                <Binding Path="DataContext.PlayingString" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tuner.Audio.Abstractions\Tuner.Audio.Abstractions.csproj" />
+    <ProjectReference Include="..\Tuner.Core\Tuner.Core.csproj" />
   </ItemGroup>
 
 </Project>

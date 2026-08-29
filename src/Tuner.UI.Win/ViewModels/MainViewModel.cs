@@ -9,8 +9,14 @@ namespace Tuner.UI.Win.ViewModels;
 
 public partial class MainViewModel : ObservableObject, IDisposable
 {
+    private const string IdleInstruction = "Play a string";
+    private const string IdleStatus = "Play a string to tune";
+    private const string ToneIdleInstruction = "Pick a string to hear its pitch";
+    private const string TonePlayingInstruction = "Tune until the beating stops";
+
     private readonly ITunerEngine _tunerEngine;
     private readonly IAudioInput _audioInput;
+    private readonly IReferenceTonePlayer _tonePlayer;
     private bool _disposed;
 
     [ObservableProperty]
@@ -50,12 +56,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _statusText = "Initializing...";
 
     [ObservableProperty]
-    private string _tuningInstruction = "Play a string";
+    private string _tuningInstruction = IdleInstruction;
 
-    public MainViewModel(ITunerEngine tunerEngine, IAudioInput audioInput)
+    /// <summary>
+    /// False: listen to the microphone and show the gauge. True: play a
+    /// reference tone for a chosen string and tune by ear instead.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isToneMode;
+
+    /// <summary>
+    /// The string whose reference tone is playing, or null when silent.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTonePlaying))]
+    private StringTarget? _playingString;
+
+    [ObservableProperty]
+    private string _toneInstruction = ToneIdleInstruction;
+
+    public bool IsTonePlaying => PlayingString != null;
+
+    public MainViewModel(ITunerEngine tunerEngine, IAudioInput audioInput, IReferenceTonePlayer tonePlayer)
     {
         _tunerEngine = tunerEngine;
         _audioInput = audioInput;
+        _tonePlayer = tonePlayer;
 
         // Subscribe to tuner events
         _tunerEngine.FrameReady += OnFrameReady;
@@ -93,7 +119,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             // Start tuner
             await _tunerEngine.StartAsync();
-            StatusText = "Play a string to tune";
+            StatusText = IdleStatus;
         }
         catch (Exception ex)
         {
@@ -105,6 +131,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
+            StopTone();
             await _tunerEngine.StopAsync();
         }
         catch
@@ -127,7 +154,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             StatusText = "Switching device...";
             await _audioInput.SetDeviceAsync(device.Id);
-            StatusText = "Play a string to tune";
+            StatusText = IdleStatus;
         }
         catch (Exception ex)
         {
@@ -140,6 +167,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (value != null)
         {
             _tunerEngine.SetTuning(value);
+            StopTone();
 
             // Update string targets
             StringTargets.Clear();
@@ -150,21 +178,98 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnIsToneModeChanged(bool value)
+    {
+        if (value)
+        {
+            ToneInstruction = ToneIdleInstruction;
+            StatusText = "Reference tone: pick a string and match it by ear";
+        }
+        else
+        {
+            StopTone();
+            ResetLiveDisplay();
+            StatusText = IdleStatus;
+        }
+    }
+
+    /// <summary>
+    /// String button: in microphone mode picks the target string to show; in
+    /// tone mode plays that string's pitch (or stops it if already playing).
+    /// </summary>
     [RelayCommand]
     private void SelectString(StringTarget? target)
     {
-        if (target != null)
+        if (target == null)
+            return;
+
+        if (IsToneMode)
         {
-            TargetStringName = target.Name;
-            TargetFrequency = target.Frequency;
+            if (target.Equals(PlayingString))
+                StopTone();
+            else
+                PlayTone(target);
+            return;
         }
+
+        TargetStringName = target.Name;
+        TargetFrequency = target.Frequency;
+    }
+
+    [RelayCommand]
+    private void StopTone()
+    {
+        try
+        {
+            _tonePlayer.Stop();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+        }
+
+        PlayingString = null;
+        ToneInstruction = ToneIdleInstruction;
+        if (IsToneMode)
+            StatusText = "Reference tone stopped";
+    }
+
+    private void PlayTone(StringTarget target)
+    {
+        try
+        {
+            _tonePlayer.Play(target.Frequency);
+            PlayingString = target;
+            ToneInstruction = TonePlayingInstruction;
+            StatusText = $"Playing {target.Name} reference tone ({target.Frequency:F2} Hz)";
+        }
+        catch (Exception ex)
+        {
+            PlayingString = null;
+            StatusText = $"Error: can't play tone - {ex.Message}";
+        }
+    }
+
+    private void ResetLiveDisplay()
+    {
+        State = TunerState.Listening;
+        CentsOffset = 0;
+        TuningInstruction = IdleInstruction;
     }
 
     private void OnFrameReady(object? sender, TunerFrame frame)
     {
+        // While a reference tone is playing the microphone hears the speaker,
+        // so live readings are meaningless: ignore them.
+        if (IsToneMode)
+            return;
+
         // Update UI on UI thread
         Application.Current?.Dispatcher.BeginInvoke(() =>
         {
+            if (IsToneMode)
+                return;
+
             State = frame.State;
             SignalLevel = frame.SignalLevel;
             CentsOffset = frame.CentsOffset;
@@ -176,16 +281,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 TargetFrequency = frame.TargetString.Frequency;
             }
 
-            // Update tuning instruction - simple "Tune Up" / "Tune Down" / "In Tune"
+            // Update tuning instruction - simple "Tune Up" / "Tune Down" / "In Tune".
+            // TooQuiet is the normal idle state (room noise is gated out), so it
+            // reads as "waiting", not as a complaint about the signal.
             TuningInstruction = frame.State switch
             {
                 TunerState.InTune => "In Tune!",
                 TunerState.Flat => "Tune Up",
                 TunerState.Sharp => "Tune Down",
-                TunerState.TooQuiet => "Play louder",
                 TunerState.Unstable => "Hold steady...",
-                TunerState.Listening => "Play a string",
-                _ => "Play a string"
+                _ => IdleInstruction
             };
 
             // Update status text
@@ -193,7 +298,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 TunerState.Unknown => "Waiting for signal...",
                 TunerState.Listening => "Listening...",
-                TunerState.TooQuiet => "Signal too quiet",
+                TunerState.TooQuiet => "Listening...",
                 TunerState.Unstable => "Signal unstable",
                 TunerState.Flat => $"String {frame.TargetString?.Name ?? "?"} is flat",
                 TunerState.Sharp => $"String {frame.TargetString?.Name ?? "?"} is sharp",
