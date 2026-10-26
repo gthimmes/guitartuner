@@ -23,6 +23,8 @@
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
+    <!-- Override vulnerable transitive System.Drawing.Common 5.0.2 pulled in by FlaUI (GHSA-rxg9-xrhp-64gj) -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.33" />
     <PackageReference Include="Moq" Version="4.20.70" />
   </ItemGroup>
 
